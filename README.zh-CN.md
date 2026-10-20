@@ -2,7 +2,7 @@
 
 **可溯源的图文 AI 搜索，让解释与图片出现在同一个答案里。**
 
-[English](README.md) · [部署指南](docs/DEPLOYMENT.md) · [配置](docs/CONFIGURATION.md) · [API](docs/API.md) · [实测结果](docs/RESULTS.md)
+[English](README.md) · [DeepSeek Harness](https://github.com/wavachao/citeweave/tree/feature/deepseek-harness-images) · [部署指南](docs/DEPLOYMENT.md) · [配置](docs/CONFIGURATION.md) · [API](docs/API.md) · [实测结果](docs/RESULTS.md)
 
 CiteWeave 是可自行部署的多模态搜索应用。它检索真实网页和图片，用本地视觉模型理解图片内容，通过相关性排序选出有用插图，再生成带段落引用的解释。用户可以放大图片、查看来源缩略图、跳转原文，并保存或导出回答。
 
@@ -16,6 +16,12 @@ CiteWeave 是可自行部署的多模态搜索应用。它检索真实网页和�
 - 浏览器本地搜索历史、近期回答缓存、复制、Markdown 导出和重新检索。
 - 访问令牌、HttpOnly 会话、请求限流、健康检查、SQLite 持久化与非 root 容器部署。
 - 自托管字体：英文 Inter，中文霞鹜文楷；界面运行时不依赖字体 CDN。
+
+## DeepSeek Harness
+
+CiteWeave 原生插件让 DeepSeek Harness 的最终回答包含有来源的图片。独立部署的 CiteWeave 后端检索文字证据、筛选相关图片，Harness 负责撰写答案，并在正文中展示插图与来源链接。
+
+[查看集成分支](https://github.com/wavachao/citeweave/tree/feature/deepseek-harness-images) · [安装与配置](https://github.com/wavachao/citeweave/blob/feature/deepseek-harness-images/plugins/deepseek-harness/README.zh-CN.md)
 
 ## 快速开始
 

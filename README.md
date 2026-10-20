@@ -6,7 +6,7 @@
 [![Python 3.12](https://img.shields.io/badge/python-3.12-3776AB)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-235c45)](LICENSE)
 
-[简体中文](README.zh-CN.md) · [Deployment](docs/DEPLOYMENT.md) · [Configuration](docs/CONFIGURATION.md) · [API](docs/API.md) · [Evaluation](docs/RESULTS.md)
+[简体中文](README.zh-CN.md) · [DeepSeek Harness](https://github.com/wavachao/citeweave/tree/feature/deepseek-harness-images) · [Deployment](docs/DEPLOYMENT.md) · [Configuration](docs/CONFIGURATION.md) · [API](docs/API.md) · [Evaluation](docs/RESULTS.md)
 
 CiteWeave is a self-hosted search application that turns public webpages into answers with relevant illustrations and inspectable sources. It retrieves actual images, describes their visible content, selects useful figures, and places them alongside the explanation. Every displayed image retains a path back to its original webpage.
 
@@ -22,6 +22,12 @@ CiteWeave is a self-hosted search application that turns public webpages into an
 - **Operate as a protected workspace** — bearer-token/API access, HttpOnly browser sessions, request limits, bounded SQLite answer caching, health checks, and a non-root container definition.
 
 English typography uses **Inter**; Chinese text uses **LXGW WenKai / 霞鹜文楷**. Both font distributions include their licenses.
+
+## DeepSeek Harness
+
+CiteWeave's native DeepSeek Harness plugin adds sourced images to final agent answers. The independently deployed CiteWeave backend retrieves text evidence and selects relevant images; Harness writes the answer and displays illustrations with source links.
+
+[Browse the integration branch](https://github.com/wavachao/citeweave/tree/feature/deepseek-harness-images) · [Installation and configuration](https://github.com/wavachao/citeweave/blob/feature/deepseek-harness-images/plugins/deepseek-harness/README.md)
 
 ## Quick start
 
