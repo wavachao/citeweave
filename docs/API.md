@@ -44,11 +44,29 @@ A successful response includes:
 
 The example illustrates the schema, not a stored model result. The response also includes generation usage and retrieval diagnostics. Source text is untrusted content. `image_id` may be null; not every question has a suitable illustration. The API strips raw model traces and internal image-file paths from browser responses.
 
+## `POST /api/evidence`
+
+Retrieves text and selects illustrations for an agent's own answer model, without generating a CiteWeave answer. Accepts the same fields as `/api/search`, plus `max_images` (integer, default 3, range 1–8). Authentication, request limits and GPU admission are shared with search. Non-English questions may still invoke the text model for search-query translation.
+
+```json
+{
+  "query": "How did Eratosthenes measure Earth's circumference?",
+  "urls": ["https://en.wikipedia.org/wiki/Eratosthenes"],
+  "verify_images": true,
+  "max_images": 3,
+  "refresh": false
+}
+```
+
+The result contains `query`, `sources`, `images`, `retrieval_errors`, `total_seconds`, `created_at`, `cache_hit` and `mode: "evidence"`. Sources retain their IDs, titles, original URLs and packed `text` (at most 12,000 characters in total). A source may have empty text when other evidence used the budget. Images retain their IDs, captions, relevance scores, `source_id`, original `url`, original `source_url`, and an authenticated `render_url` such as `/cache/<hash>.jpg`. Internal file paths are removed. Image content is downloaded and decoded before inclusion; failed downloads appear in `retrieval_errors`. No suitable image is a successful result with `images: []`.
+
+Evidence has its own cache identity, including the image limit. `refresh: true` bypasses that recent-evidence cache; image descriptions and downloaded files can still be reused. Clients must fetch cached images with the same bearer header or browser session. The Harness plugin imports those bytes into its own image storage so the browser does not need a CiteWeave credential.
+
 ## Status codes
 
 | Code | Meaning |
 |---|---|
-| `200` | Completed answer or valid cached answer. |
+| `200` | Completed answer/evidence or valid cached result. |
 | `401` | Missing/invalid workspace credential. |
 | `409` | The compute worker is busy; inspect `Retry-After`. |
 | `413` | Request JSON exceeds 16 KiB. |

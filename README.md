@@ -83,6 +83,10 @@ The application resolves generated markers against retrieved evidence. It never 
 
 The backend uses FastAPI, PyTorch, Transformers, sentence-transformers and SQLite. The browser interface uses plain HTML, CSS and JavaScript, with no frontend build step. See [architecture](docs/ARCHITECTURE.md).
 
+## DeepSeek Harness
+
+The [CiteWeave Harness plugin](plugins/deepseek-harness/README.md) adds sourced illustrations to agent answers using Harness's existing Markdown image renderer. It calls the evidence API, imports selected image files into Harness, and gives its answer model the retrieved text, visual descriptions and original source links. CiteWeave does not generate a second answer in this mode. The Python GPU service remains a separate deployment.
+
 ## API
 
 ```bash

@@ -56,6 +56,10 @@ docker compose up --build -d
 
 后端为 FastAPI、PyTorch、Transformers、sentence-transformers 和 SQLite；前端为原生 HTML、CSS、JavaScript，无需额外构建。默认使用本地 Qwen 模型，文本生成可选 DeepSeek 接口；视觉与排序仍在本地执行。访问令牌与模型 API 密钥是两种独立配置。
 
+## DeepSeek Harness 插件
+
+[Harness 插件](plugins/deepseek-harness/README.zh-CN.md)为 Agent 回答增加有来源的配图。插件调用证据接口，将选中的图片存入 Harness，并把网页文字、图片内容说明和原始出处交给 Harness 的模型组织回答；直接复用现有 Markdown 图片展示。此模式不在 CiteWeave 内重复生成答案，Python GPU 服务独立部署。
+
 ## 已有实测
 
 - 排序组件的分级 NDCG@5：训练后 0.75981，余弦基线 0.72445；186 道有定义的保留题，使用官方发布的 VLM 弱标签。

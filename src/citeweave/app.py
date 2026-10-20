@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 from urllib.parse import urlparse
 
+import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -14,10 +15,10 @@ from pydantic import BaseModel, Field
 
 from . import config
 from .cache import AnswerCache
-from .engine import Engine
+from .engine import Engine, pack_sources
 from .resources import gpu_session
 from .security import RequestLimiter, authorized, denied
-from .web import retrieve
+from .web import cache_image, retrieve
 
 app = FastAPI(title="CiteWeave", version="0.1.0")
 logger = logging.getLogger("citeweave")
@@ -42,7 +43,7 @@ app.mount("/static", StaticFiles(directory=static), name="static")
 async def admission(request: Request, call_next):
     request_id = secrets.token_hex(8)
     request.state.request_id = request_id
-    protected = request.url.path.startswith(("/api/search", "/cache/", "/media/"))
+    protected = request.url.path.startswith(("/api/search", "/api/evidence", "/cache/", "/media/"))
     if protected and not authorized(request):
         return denied("Access token required. Connect this workspace to continue.")
     if request.method == "POST":
@@ -78,6 +79,10 @@ class SearchRequest(BaseModel):
     urls: list[str] = Field(default_factory=list, max_length=5)
     verify_images: bool = True
     refresh: bool = False
+
+
+class EvidenceRequest(SearchRequest):
+    max_images: int = Field(default=3, ge=1, le=8)
 
 
 class SessionRequest(BaseModel):
@@ -187,14 +192,48 @@ def cache_parameters(request):
     }
 
 
+def retrieve_evidence(request):
+    """Share discovery and visual descriptions between answers and agent evidence."""
+    retrieval_query = request.query
+    if any(ord(c) > 127 for c in request.query):
+        translation = engine.generator.complete(
+            "Translate this search question to English. Preserve names, numbers and formulas. "
+            "Output only the translated question, do not answer it:\n" + request.query
+        )
+        retrieval_query = translation["response"].strip()
+    sources, images, errors = retrieve(retrieval_query, request.urls)
+    if request.verify_images and images:
+        from .vision import caption_images
+
+        candidates = engine.ranker.select(retrieval_query, images, limit=8)
+        if not candidates:
+            candidates = images[:8]
+        images = caption_images(candidates, engine.generator, limit=8)
+    return retrieval_query, sources, images, errors
+
+
 @app.post("/api/search")
 def ask(request: SearchRequest, http_request: Request):
+    return run_search(request, http_request)
+
+
+@app.post("/api/evidence")
+def evidence(request: EvidenceRequest, http_request: Request):
+    """Return sourced text and verified image files for the caller's own answer model."""
+    return run_search(request, http_request, evidence_only=True)
+
+
+def run_search(request, http_request, evidence_only=False):
     started = time.monotonic()
-    key = answer_cache.key(cache_parameters(request))
+    parameters = cache_parameters(request)
+    mode = "evidence" if evidence_only else "live_web"
+    if evidence_only:
+        parameters.update(mode=mode, max_images=request.max_images)
+    key = answer_cache.key(parameters)
     cached = answer_cache.get(key) if not request.refresh else None
     if cached:
         cached.update(cache_hit=True, total_seconds=round(time.monotonic() - started, 2))
-        return browser_answer(cached, "live_web")
+        return browser_answer(cached, mode)
     if not request_lock.acquire(blocking=False):
         raise HTTPException(
             409,
@@ -204,30 +243,40 @@ def ask(request: SearchRequest, http_request: Request):
     try:
         with gpu_session(blocking=False):
             try:
-                retrieval_query = request.query
-                if any(ord(c) > 127 for c in request.query):
-                    translation = engine.generator.complete(
-                        "Translate this search question to English. Preserve names, numbers and formulas. "
-                        "Output only the translated question, do not answer it:\n" + request.query
+                retrieval_query, sources, images, errors = retrieve_evidence(request)
+                if evidence_only:
+                    selected = engine.ranker.select(
+                        retrieval_query, images, limit=request.max_images
                     )
-                    retrieval_query = translation["response"].strip()
-                sources, images, errors = retrieve(retrieval_query, request.urls)
-                if request.verify_images and images:
-                    from .vision import caption_images
-
-                    candidates = engine.ranker.select(retrieval_query, images, limit=8)
-                    if not candidates:
-                        candidates = images[:8]
-                    images = caption_images(candidates, engine.generator, limit=8)
-                answer = engine.answer(
-                    request.query, sources, images, retrieval_query=retrieval_query
-                )
+                    usable = []
+                    for image in selected:
+                        try:
+                            path = cache_image(image["url"])
+                            usable.append({**image, "local_path": str(path)})
+                        except (httpx.HTTPError, ValueError, OSError) as exc:
+                            errors.append({"url": image["url"], "error": str(exc)[:250]})
+                    packed = pack_sources(
+                        retrieval_query, sources, engine.ranker, char_budget=12000
+                    )
+                    texts, remaining = {}, 12000
+                    for source in packed:
+                        texts[source["id"]] = source["text"][:remaining]
+                        remaining -= len(texts[source["id"]])
+                    answer = {
+                        "query": request.query,
+                        "sources": [{**s, "text": texts.get(s["id"], "")} for s in sources],
+                        "images": usable,
+                    }
+                else:
+                    answer = engine.answer(
+                        request.query, sources, images, retrieval_query=retrieval_query
+                    )
                 answer["retrieval_errors"] = errors
                 answer["total_seconds"] = round(time.monotonic() - started, 2)
                 answer["created_at"] = time.time()
                 answer["cache_hit"] = False
                 answer_cache.put(key, answer)
-                return browser_answer(answer, "live_web")
+                return browser_answer(answer, mode)
             finally:
                 engine.generator.unload()
                 engine.ranker.unload()

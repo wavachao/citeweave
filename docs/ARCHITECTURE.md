@@ -12,6 +12,8 @@
 
 ## Storage
 
+Agent integrations can call `POST /api/evidence` to stop before answer generation. This path shares admission, discovery, visual descriptions and ranking with search, packs at most 12,000 text characters, and caches downloadable selected images. Source metadata remains available even when its text is omitted from the budget. Evidence and complete answers use distinct cache keys. The DeepSeek Harness plugin imports the selected images into Harness and passes image destinations and original source links to its own answer model.
+
 | Path | Contents | Lifecycle |
 |---|---|---|
 | `models/` | Pinned upstream model resources | Read-only during serving |
