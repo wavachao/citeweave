@@ -1,0 +1,17 @@
+.venv/
+.venv-eval/
+.env*
+!.env.example
+*.pem
+*.key
+.cache/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+data/
+models/
+reference/
+work/
+runs/
+*.egg-info/

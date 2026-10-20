@@ -1,0 +1,46 @@
+name: checks
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  cpu-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.8"
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --frozen --only-group ci
+      - run: uv run --no-sync ruff check src scripts tests
+      - run: uv run --no-sync ruff format --check src scripts tests
+      - run: node --check src/citeweave/static/app.js
+      - run: uv run --no-sync pytest -q
+        env:
+          PYTHONPATH: src
+  container-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the runtime image
+        run: docker build -t citeweave:ci .
+      - name: Start a protected workspace without model assets
+        run: |
+          docker run -d --name citeweave-ci -p 127.0.0.1:8765:8765 \
+            -e CITEWEAVE_ACCESS_TOKEN=ci-only-not-a-production-token-0123456789 citeweave:ci
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8765/health; then break; fi
+            sleep 2
+          done
+          test "$(curl --silent -o /dev/null -w '%{http_code}' http://127.0.0.1:8765/ready)" = 503
+          test "$(curl --silent -o /dev/null -w '%{http_code}' -X POST \
+            -H 'Content-Type: application/json' -d '{"query":"Why?"}' \
+            http://127.0.0.1:8765/api/search)" = 401
+          curl --fail --silent http://127.0.0.1:8765/static/fonts/manifest.json > /dev/null
+      - name: Container diagnostics
+        if: always()
+        run: docker logs citeweave-ci || true
