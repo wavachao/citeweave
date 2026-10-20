@@ -1,6 +1,6 @@
 # Deployment
 
-CiteWeave supports a single protected workspace on a Linux NVIDIA host. Use one application process per GPU. A process/file lock serializes inference; concurrent uncached searches receive `409` and a retry hint. Horizontal scaling and multi-tenant authentication are outside this release.
+CiteWeave supports a single protected workspace on a Linux NVIDIA host. Use one application process per GPU. A process/file lock serializes inference; concurrent uncached searches receive `409` and a retry hint.
 
 ## Local service
 
@@ -25,7 +25,7 @@ docker compose logs -f citeweave
 
 The image runs as UID/GID 10001, drops Linux capabilities, and disables privilege escalation. The Compose file requires `CITEWEAVE_ACCESS_TOKEN`; generate it and save it in `.env` before startup. Model files must be readable by that UID. Model and trained-ranker directories are read-only mounts; data and work directories use persistent named volumes.
 
-The host port binds to `127.0.0.1`, preserving a private application boundary. The default CUDA environment and model-loading path are intended for NVIDIA Linux hosts, not macOS or CPU-only inference.
+The host port binds to `127.0.0.1`. The container uses the Linux NVIDIA CUDA runtime and loads local models on the GPU.
 
 ## HTTPS reverse proxy
 
@@ -54,7 +54,7 @@ Do not trust arbitrary forwarded headers. The normal CLI disables proxy-header t
 ## Health and acceptance
 
 - `GET /health`: process liveness and model-asset summary; it does not load GPU models.
-- `GET /ready`: local model config availability, returning `503` until required assets are present. This is an asset check, not a successful-inference guarantee.
+- `GET /ready`: local model config availability, returning `503` until required assets are present.
 - Submit a real `/api/search` request with a fixed public source URL to validate the GPU, retrieval and complete pipeline.
 - Confirm that an unauthenticated search returns `401`, a second identical search returns `cache_hit: true`, and an explicit refresh regenerates.
 - Verify fonts, source links, image loading and export in the browser.

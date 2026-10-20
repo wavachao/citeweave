@@ -42,7 +42,7 @@ A successful response includes:
 }
 ```
 
-The example illustrates the schema, not a stored model result. The response also includes generation usage and retrieval diagnostics. Source text is untrusted content. `image_id` may be null; not every question has a suitable illustration. The API strips raw model traces and internal image-file paths from browser responses.
+The response also includes generation usage and retrieval diagnostics. `image_id` is null when a block has no illustration. Raw model traces and internal image-file paths are excluded from browser responses.
 
 ## Status codes
 

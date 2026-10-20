@@ -1,83 +1,86 @@
 # Experiment protocol
 
-## Objective and comparison tracks
+This document defines the datasets, generation settings and evaluation procedures behind the [reported results](RESULTS.md). Live-web requests use newly retrieved sources; benchmark runs use the released M²RAG evidence snapshot.
 
-This appendix defines controlled comparisons against M²RAG, separately from the deployable web application. A quality-superiority claim requires real comparable benchmark results and is not implied by a working interface. No such superiority claim is made for this release.
+## Data and splits
 
-1. **Implementation parity:** execute the original single-stage and multi-stage summarizer classes at pinned commit `ea6b9977f5a153215b38cd9a6aa3e4702ffbda22`. Keep known behavior, including its parsing behavior, unchanged in reference runs.
-2. **Controlled method comparison:** same Qwen2.5-7B-Instruct model (optionally the same released distilled adapter), precision, input candidate pool, token budgets, question IDs, and judges. The official prefilter uses released relevance annotations; this is disclosed and shared by both methods. CiteWeave's learned inference does not receive relevance labels or evaluator rationales.
-3. **Live-web application:** retrieve live sources with no benchmark labels. This is a separate deployment test, not a directly comparable benchmark score.
+The released `dev_set.jsonl` contains 750 unique questions: 200 at level 1, 300 at level 2 and 250 at level 3. The reference generation configuration selects level 1.
 
-## Dataset audit
+Six questions used during format development and UI checks are excluded: `14v6kn`, `1847u5`, `18amxd`, `2xhua3`, `5ajwkl`, `1zghby`. This leaves **194 level-1 questions**, or 744 across all levels. `--include-pilot` restores the excluded questions for full-subset runs.
 
-The paper describes 1,000 questions, with a 200-query main comparison. The currently released `dev_set.jsonl` contains 750 unique questions: 200 at level 1, 300 at level 2 and 250 at level 3. The official provided generation config selects level 1. Always report the released subset, not an implied 1,000-question replication.
+The released training snapshot contains 1,605 records. Ranker training uses the training-only BSON relevance labels: scores ≥8 are positive, ≤3 negative, and intermediate scores are excluded. Query deduplication and a SHA-256 split of normalized questions produce 1,024 training and 122 validation groups. Labels come from the released VLM annotations.
 
-Released training data contains 1,605 records. Some have little or no webpage context. The distilled outputs include almost every supplied image, so output inclusion is unsuitable as a negative label. Ranking training instead reads the original training-only BSON element relevance labels, keeps >=8 positives and <=3 negatives, excludes ambiguous labels, deduplicates queries and splits by SHA-256 of normalized question. These are preference labels, not human annotations.
+Benchmark-query overlap is checked before training. Checkpoint selection and relevance-threshold calibration use the training validation split. Benchmark relevance scores and evaluator rationales are excluded from inference features. The observed 20-query pilot is a development result for subsequent method changes; future confirmatory tests need unobserved questions.
 
-Benchmark question overlap is checked before training. Benchmark scores and evaluator reasoning are never input features for the trained relevance head. Model selection and abstention threshold calibration use training-set validation questions only.
+## Generation tracks
 
-## Official metrics
+The five tracks are M²RAG single-stage, M²RAG multi-stage, CiteWeave, distilled M²RAG single-stage and distilled CiteWeave. Reference classes and prompts come from commit `ea6b9977f5a153215b38cd9a6aa3e4702ffbda22` of [M²RAG](https://github.com/maziao/M2RAG).
 
-The primary local method comparison is base CiteWeave versus the reproduced original Qwen2.5-7B multi-stage method on identical held-out IDs. Single-stage and released distilled-adapter tracks are additional controls. A higher sample mean with an uncertainty interval spanning zero is inconclusive. These 7B controls do not establish superiority to the paper's strongest 72B configuration, which has not been reproduced on this GPU.
+| Setting | Value |
+|---|---|
+| Base generator | Qwen2.5-7B-Instruct |
+| Distilled tracks | Same released M²RAG adapter |
+| Hardware | One NVIDIA RTX 4090 D |
+| Text/vision/adapter precision | BF16 |
+| Ranking encoder precision | FP32 |
+| Input token limit | 24,576 |
+| Output token limit | 1,600 |
+| Candidate image cap | 10 |
+| Candidate prefilter | Shared original prefilter using released relevance annotations |
+| Output image count | Selected independently by each method |
 
-Four text metrics: fluency, response relevance, context precision, faithfulness.
+The annotation-based prefilter is part of the reference benchmark setup. CiteWeave receives the resulting candidate pool without relevance labels. Base and distilled results are reported separately.
 
-Four image metrics: coherence, helpfulness, reference, recall.
+CiteWeave generates paragraphs with source/image ID markers, resolves known IDs and removes duplicate image placements. If the answer contains no valid image marker, semantic paragraph matching can place preselected illustrations above similarity 0.3. The reference tracks retain their original prompts, stage logic and parsing behavior.
 
-The original implementation aggregates eight normalized metrics; image precision-related metrics are aggregated over output images. Preserve this convention for official comparisons. Also report output image counts and failure rates so higher recall cannot obscure excessive illustration or missing outputs.
+Decoding computes last-token logits to reduce prefill memory. CiteWeave records output-cap exhaustion as an incomplete-answer failure. All tracks retain cap flags, failed predictions, image counts, timing and input-truncation diagnostics.
 
-Original judge configuration: `gpt-4o-2024-08-06`, with `gpt-4o-mini-2024-07-18` for RAGAS metrics. Judge replacements, local diagnostics, caption similarity and training-validation NDCG must be explicitly labeled and must not be called published M²RAG overall scores.
+## Ranking component test
 
-## Reproducibility and fair reporting
+The frozen ranker is tested on the 194 held-out level-1 questions using all valid captioned, scored images, deduplicated by archive URL. This component test omits the generation prefilter. Model inputs are question/caption text; released relevance scores supply the test labels.
 
-- Store exact question IDs, input hashes, reference commit, model revisions, precision and generation settings.
-- No silent dropping of failed generations or judge failures.
-- No tuning on benchmark predictions or labels; use the training validation split.
-- Report context truncation counts and shared hardware limits.
-- Compare base-model methods separately from distilled-model methods.
-- For the final claim, evaluate both methods on the same completed subset with the same judges; report each metric, latency, image count and a paired query-level uncertainty estimate.
-- A gain in image recall or weak-label NDCG alone does not establish better total answer quality.
+Test NDCG@5 uses linear gains from the released 0–10 scores. Training-validation NDCG uses binary labels. Empty or zero-gain test cases are listed explicitly and excluded from the defined-case ranking mean. The paired query bootstrap uses 10,000 resamples and seed 42.
 
-## Gates for a benchmark superiority claim
+## Quality metrics and judges
 
-1. uv-locked environment and tests pass on the 4090D.
-2. Real local model generation, source cards and image display work.
-3. Ranking training and held-out validation run on the GPU.
-4. Reference and proposed predictions finish on identical benchmark IDs.
-5. Official quality evaluation completes, with independently reviewable image/text samples.
-6. Claim achievement only if the predeclared comparable target is actually reached.
+The evaluator retains the original eight normalized metrics:
 
-## Engineering pilot exclusion
+- Text: fluency, response relevancy, context precision and faithfulness.
+- Images: coherence, helpfulness, reference and recall.
 
-Known smoke/demo IDs: `14v6kn`, `1847u5`, `18amxd`, `2xhua3`, `5ajwkl`, `1zghby`. These are excluded by default from subsequent held-out comparisons. This leaves 194 level-1 questions / 744 across all released levels. Original full-subset replication remains available via `--include-pilot`, with explicit reporting.
+Text metrics and image recall are averaged over questions. The three image precision metrics are pooled over output images. Recall divides the number of matching positive URLs by the original positive-image list length, preserving duplicate entries in the denominator; questions with no positive image receive 1. Overall is the mean of the eight aggregate metrics. Generation-only diagnostic recall deduplicates that denominator and is reported separately.
 
-## Proposed answer formatting
+| Judge protocol | Configuration | Recorded coverage |
+|---|---|---|
+| Original | `gpt-4o-2024-08-06`; `gpt-4o-mini-2024-07-18` for RAGAS | Inputs staged |
+| DeepSeek proxy | `deepseek-flash`, thinking disabled, 8,192 output tokens | 20 paired questions |
 
-The proposed method generates natural paragraphs with source/image ID markers, resolves only known IDs, preserves evidence captions and removes duplicate image insertions. If no valid image marker is supplied, semantic paragraph matching places preselected illustrations above a fixed similarity threshold (0.3, an engineering heuristic). Source citations are never invented by this fallback. The unchanged original path uses its original prompts, stage logic and parser. The proposed prompts, parser and image selector are part of the method; their code hash and the uv lock hash are stored in each prediction manifest. Format development used the excluded engineering queries. The generation snapshot was frozen before the proxy pilot was judged. The 20 now-observed proxy questions must not be reused as an untouched confirmatory test for future changes based on these results.
+The DeepSeek protocol retains the original prompts, metric code and pooling. Context trimming uses the reference wrapper's approximate `cl100k_base` fallback. Pilot selection orders questions by SHA256(`42:query_id`) and takes 20 before reading scores. The [adapter guide](DEEPSEEK_PROXY.md) covers execution and spending limits.
 
-Local Qwen text/vision models and LoRA adapters use BF16; ranking encoders use FP32. Generation computes last-token logits only, which preserves autoregressive decoding while reducing prefill memory on the 24 GB GPU. The proposed method reports output-budget exhaustion as an incomplete-answer failure; the reference parser behavior is retained. Budget exhaustion and failed generations are logged for both methods.
+Confidence intervals resample paired questions and recompute pooled image metrics on each draw. Per-metric intervals are exploratory, without multiplicity correction. Each report identifies its question subset, judge protocol, output counts and failures.
 
-## Frozen code and supplementary controls
+## Input validation and cache identity
 
-The current batch imports generation code from `work/frozen/comparison-v1/src` via `PYTHONPATH`. Its implementation hash is `21b3848cb3d79e0419898923f563913b211fb488379beda224d9ef959f565d1f`; its uv lock hash is `a87433dc263e4b5bf57a95c3a2c7b1dc6daf4275b528b9dd85d501341839e7bd`. Application proxy/formula-parsing fixes and evaluation helpers were added after freezing. They do not alter the generation snapshot, weights, inputs or settings. The frozen source archive and current application archive are separate artifacts.
+Preflight checks planned predictions, nonempty answers, image IDs, placeholder counts, archive locations and image decoding. CiteWeave `iN` markers are mapped to original numeric IDs in evaluator input copies after candidate-index and URL checks. Parent predictions remain unchanged.
 
-A supplementary single-stage parser-repaired control reprocesses unchanged raw generations into a new directory. It strips only an outer Markdown fence, preserving interior fences and surrounding prose. The original run is immutable; no generation or API call occurs. Its manifest records the parent run and script hash; each derived record records its parent's prediction hash. This is a postprocessing control, not a new algorithm-quality result. Multi-stage intermediate generations are not repaired by this export control.
+Request manifests hash raw predictions, staged inputs, image files and judge settings, including the reference commit, package versions and endpoint identity. Cache reuse requires matching identities. Credentials are excluded. Completion requires finite, correctly normalized scores for every expected task and agreement between recomputed aggregates and the original summary table.
 
-The separately named v2 control also removes repeated valid image-ID markers before the original handler, preserving the first marker and all non-image prose. This avoids the upstream global-replacement mismatch between placeholder count and the unique output-image list. Unknown IDs still pass to the unchanged original handler. V1 outputs remain intact, and their exact helper source is preserved at `work/frozen/parser-repair-v1.py` in the experiment snapshot. Raw-generation integrity audits compare all model inputs, raw responses, evidence, usage and call records against the parents. Neither control changes original generation or erases output-cap flags. Report original and repaired results separately; do not label parser repairs as proposed algorithm gains.
+`--prepare-only` validates and stages inputs without calling a judge. Paid runs require `--allow-paid-evaluation`. Original and DeepSeek protocols use separate caches and completion flags. Transport contract checks use intercepted requests and synthetic responses.
 
-The frozen ranker's additional component test uses all valid captioned, scored images from the held-out level-1 questions, deduplicated by archive URL. Released VLM scores are labels only, never model inputs. No checkpoint or threshold selection uses these test results. Graded linear-gain NDCG@5 is reported separately from binary training-validation NDCG and the official eight metrics. Undefined zero-gain/empty cases are listed explicitly. Both candidate scoring and the paired bootstrap run on CPU without interfering with GPU generation.
+## Frozen source
 
-## Judge input and result validation
+The generation snapshot is distributed as `citeweave-generation-v1-source.tar.gz` in the [v0.1.0 release](https://github.com/wavachao/citeweave/releases/tag/v0.1.0).
 
-Preflight verifies every planned prediction, nonempty answer, image identity, placeholder count, archive location and image decoding. Proposed `iN` IDs are converted to original numeric IDs only in separate evaluator input copies, after verifying the candidate index and cached image URL. Original prediction files remain unchanged. Failed or empty answers are not silently removed.
+| Artifact | SHA-256 |
+|---|---|
+| Generation implementation | `21b3848cb3d79e0419898923f563913b211fb488379beda224d9ef959f565d1f` |
+| Generation uv lock | `a87433dc263e4b5bf57a95c3a2c7b1dc6daf4275b528b9dd85d501341839e7bd` |
+| Source archive | `ecd76fc8da8f385d407f4cc6602eea960670ec9316b2f0fef090f3169da40bd2` |
 
-The evaluation request manifest hashes raw predictions, staged inputs, used image files and the actual judge protocol (original commit, judge settings, metric package versions and endpoint identity). A changed identity rejects the previous cache. No key is stored in this manifest. A successful process exit alone is insufficient: all expected per-task scores must be finite and normalized correctly, and recomputed aggregates must agree with the original summary table. The supplemental bootstrap resamples paired queries and recomputes pooled image metrics for each draw, preserving the original pooling and duplicate-image recall denominator.
+Every prediction manifest records implementation and lock hashes, model revisions, precision, question IDs and generation settings. The archived source is loaded through `PYTHONPATH` for snapshot reproduction. Later application changes have their own implementation identities.
 
-An offline transport contract uses an in-process mock, a dummy key and a synthetic non-score response to check original image request formatting. This is engineering verification only and never creates actual evaluation scores. Original judges remain necessary for the declared official comparison.
+## Supplementary parser controls
 
+The v1 single-stage control strips only an outer Markdown fence, preserving interior code fences and surrounding prose. V2 additionally removes repeated valid image-ID markers before the original handler, keeping the first occurrence. This addresses the upstream global-replacement mismatch between placeholder count and the unique output-image list.
 
-## DeepSeek proxy protocol
-
-A separately labeled DeepSeek protocol reuses original prompts, metric code and pooling, with `deepseek-flash` for text and images. An external adapter disables thinking/retries, caps outputs at 8,192 tokens and serializes metered requests. The original tokenizer's cl100k_base fallback remains an approximation. None of this is labeled an original GPT-4o result. Provider version, adapter hash and settings enter a separate protocol fingerprint, cache directory and completion flag.
-
-A deterministic SHA256(seed:query_id) pilot selects the same 20 questions for both primary methods without reading scores. The recorded pilot used a USD 2 total budget shared across both runs through one durable spending ledger. Full 194-query quality scores were not computed. See `DEEPSEEK_PROXY.md` for commands, spending assumptions, failure behavior and evidence.
+Controls have separate output directories, parent prediction hashes and helper-source hashes. Integrity audits compare model inputs, raw responses, evidence, usage and calls against their parents. Existing run directories and output-cap flags are preserved. The [results](RESULTS.md#parser-controls) list export changes for each control.

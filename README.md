@@ -18,10 +18,8 @@ CiteWeave is a self-hosted search application that turns public webpages into an
 - **Explain with images** — local visual descriptions, query–caption ranking, redundancy control, and illustrations placed next to related paragraphs.
 - **Keep evidence inspectable** — paragraph citations, source cards, image previews, original-page links, and an image viewer.
 - **Support everyday use** — browser-local search history, reusable answers, copy, Markdown export, and explicit refresh.
-- **Run in your own environment** — local Qwen models on one NVIDIA GPU, or optional DeepSeek text generation. Fonts and interface assets are self-hosted.
+- **Run in your own environment** — local Qwen models on one NVIDIA GPU, or optional DeepSeek text generation.
 - **Operate as a protected workspace** — bearer-token/API access, HttpOnly browser sessions, request limits, bounded SQLite answer caching, health checks, and a non-root container definition.
-
-English typography uses **Inter**; Chinese text uses **LXGW WenKai / 霞鹜文楷**. Both font distributions include their licenses.
 
 ## DeepSeek Harness
 
@@ -34,7 +32,7 @@ CiteWeave's native DeepSeek Harness plugin adds sourced images to final agent an
 ### Requirements
 
 - Linux, Python 3.12, and [uv](https://docs.astral.sh/uv/).
-- A CUDA-capable NVIDIA GPU. The complete local pipeline has been exercised on a **24 GB RTX 4090 D**. Other hardware is not yet validated.
+- A CUDA-capable NVIDIA GPU; the tested configuration uses a **24 GB RTX 4090 D**.
 - A driver compatible with the locked PyTorch CUDA 12.8 wheels, about **50 GB free disk**, and outbound access to model downloads and public webpages.
 
 ```bash
@@ -85,7 +83,7 @@ flowchart LR
     B --> U[Interleaved answer and source cards]
 ```
 
-The application resolves generated markers against retrieved evidence. It never accepts model-generated image URLs as new evidence. Image descriptions distinguish visible content from publisher captions. Pictures are illustrations, not independent proof of measurements or causal claims.
+The application resolves source and image markers against retrieved evidence, keeping each illustration linked to its original page. Visual descriptions and publisher captions are stored separately.
 
 The backend uses FastAPI, PyTorch, Transformers, sentence-transformers and SQLite. The browser interface uses plain HTML, CSS and JavaScript, with no frontend build step. See [architecture](docs/ARCHITECTURE.md).
 
@@ -102,19 +100,19 @@ Responses contain answer blocks, resolved image/source IDs, source metadata and 
 
 ## Evaluation and reproducibility
 
-CiteWeave includes the pinned original M²RAG baseline, controlled generation, training scripts, input validation, explicit failure records, and separate original/proxy judge protocols.
+CiteWeave includes ranker training, a pinned M²RAG reference implementation, and reproducible generation and evaluation tools.
 
-| Measurement | Reference | CiteWeave |
+The trained image ranker achieves **0.75981 graded NDCG@5**, compared with **0.72445** for cosine similarity, on 186 held-out questions with released VLM relevance labels.
+
+The generation comparison uses Qwen2.5-7B-Instruct on one RTX 4090 D with shared input and output token limits:
+
+| Measurement | M²RAG multi-stage | CiteWeave |
 |---|---:|---:|
-| Image ranking, graded NDCG@5¹ | 0.72445 cosine | 0.75981 trained cross-encoder |
-| Median generation time, 194 questions² | 30.71 s original multi-stage | 8.04 s |
-| Overall DeepSeek proxy, 20 paired questions³ | 0.72718 original multi-stage | 0.71914 |
+| Median generation time · 194 questions | 30.71 s | 8.04 s |
+| Mean output images · 194 questions | 3.216 | 0.871 |
+| Overall score · 20 paired questions, DeepSeek judge | 0.72718 | 0.71914 |
 
-¹ 186 defined held-out questions, released VLM weak relevance labels. The paired difference interval is [0.01451, 0.05655]. This measures ranking, not answer quality.
-
-² Same 7B model and recorded generation budgets on one 4090 D. CiteWeave inserts fewer images and has lower image coverage; the speed result is not an overall quality claim.
-
-³ Reuses original metrics with a different judge. The overall difference interval [-0.06090, 0.04762] includes zero. **No claim of exceeding M²RAG or reproducing the paper's GPT-4o scores is made.** Full settings, failures, and all eight metrics are in [measured results](docs/RESULTS.md) and [the protocol](docs/PROTOCOL.md).
+Full metrics, confidence intervals, image-selection behavior and reproduction settings are in [measured results](docs/RESULTS.md) and the [experiment protocol](docs/PROTOCOL.md).
 
 ## Development
 
@@ -127,11 +125,11 @@ uv run pytest -q
 
 CI runs the CPU-only contract suite without downloading model weights. A GPU deployment must also pass a real retrieval/generation check. Contributing instructions, test scope, and checks for changes are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## Operating boundaries
+## Deployment notes
 
-- The shipped service is a **single-workspace, single-GPU application**. It serializes expensive work and returns a retryable busy response. It is not a multi-tenant inference cluster.
+- The service uses **one workspace and one application worker per GPU**. It serializes expensive work and returns a retryable busy response.
 - Web access depends on upstream availability. For a managed deployment, configure a controlled SearXNG endpoint rather than relying on the default DDGS discovery service.
-- Dynamic pages, paywalls, missing images, and insufficient evidence can limit answers. Always inspect sources for consequential decisions.
+- Retrieval supports public webpages. Dynamic pages, paywalls and unavailable images can limit the evidence returned.
 - Browser history stays on the device; server answers and images are cached on the deployment volume. Configure retention and avoid entering secrets in queries.
 
 ## License and acknowledgments

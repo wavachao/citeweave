@@ -23,7 +23,7 @@ Passing `--all` also downloads the MiniLM training base and the original M²RAG 
 - Weight SHA256: `354b7e3f813851b4f61848badad37a60fa0c115c92ddd6b922b8b8fc780632b5`.
 - License: Apache-2.0 for the derived ranker; upstream dataset and resource terms still apply.
 
-The model scores English question/caption relevance. It does not see image pixels, authenticate pictures, establish identity, or verify the factual claims in an answer. Live non-English questions use an English retrieval/ranking translation while answers follow the original question language. Weak labels and domain shift limit calibration, particularly recall. See `RESULTS.md` for measured tradeoffs.
+The ranker scores English question/caption pairs; image pixels are processed separately by the vision model. For non-English questions, the application translates the retrieval/ranking query into English and answers in the original language. The selected threshold balances precision and recall on the training validation split. See [evaluation results](RESULTS.md#image-ranking) for calibration and coverage measurements.
 
 ## Re-training
 
