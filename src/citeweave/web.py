@@ -16,6 +16,16 @@ from . import config
 USER_AGENT = "CiteWeave/0.1 (+https://github.com/wavachao/citeweave; source-linked search)"
 
 
+def _doh_address(hostname):
+    with httpx.Client(timeout=12) as client:
+        response = client.get("https://dns.google/resolve", params={"name": hostname, "type": "A"})
+        response.raise_for_status()
+        addresses = [a["data"] for a in response.json().get("Answer", []) if a.get("type") == 1]
+    if not addresses or any(not ipaddress.ip_address(a).is_global for a in addresses):
+        raise ValueError("No public origin address found")
+    return addresses[0]
+
+
 def _public_address(url):
     parsed = urlsplit(url)
     if (
@@ -33,21 +43,15 @@ def _public_address(url):
         literal = None
     if literal is not None and not literal.is_global:
         raise ValueError("Nonpublic IP literals are blocked")
+    if literal is None and os.getenv("CITEWEAVE_DOH", "0") == "1":
+        return _doh_address(parsed.hostname)
     ips = socket.getaddrinfo(parsed.hostname, parsed.port or 443, type=socket.SOCK_STREAM)
     addresses = [entry[4][0] for entry in ips]
     fake_net = ipaddress.ip_network("198.18.0.0/15")
     if addresses and all(ipaddress.ip_address(a) in fake_net for a in addresses):
         # Clash fake-IP DNS is not an origin address. Resolve via a fixed trusted
         # DoH endpoint, then apply the same public-address check and IP pinning.
-        with httpx.Client(timeout=12) as client:
-            response = client.get(
-                "https://dns.google/resolve", params={"name": parsed.hostname, "type": "A"}
-            )
-            response.raise_for_status()
-            addresses = [a["data"] for a in response.json().get("Answer", []) if a.get("type") == 1]
-        if not addresses or any(not ipaddress.ip_address(a).is_global for a in addresses):
-            raise ValueError("No public origin address found")
-        return addresses[0]
+        return _doh_address(parsed.hostname)
     if not ips or any(not ipaddress.ip_address(entry[4][0]).is_global for entry in ips):
         raise ValueError("Private, loopback, link-local and reserved destinations are blocked")
     return next((entry[4][0] for entry in ips if entry[0] == socket.AF_INET), ips[0][4][0])

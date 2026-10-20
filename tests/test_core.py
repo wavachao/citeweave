@@ -147,6 +147,44 @@ def test_page_preserves_image_source_and_figcaption():
     assert images[0]["caption"] == "Actual source caption"
 
 
+def test_optional_doh_avoids_polluted_dns_and_rejects_private_answers(monkeypatch):
+    from citeweave import web
+
+    address = ["208.80.154.224"]
+
+    class Response:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"Answer": [{"type": 1, "data": address[0]}]}
+
+    class Client:
+        def __init__(self, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def get(self, endpoint, params):
+            assert endpoint == "https://dns.google/resolve"
+            assert params["name"] == "en.wikipedia.org"
+            return Response()
+
+    monkeypatch.setenv("CITEWEAVE_DOH", "1")
+    monkeypatch.setattr(web.httpx, "Client", Client)
+    monkeypatch.setattr(web.socket, "getaddrinfo", lambda *a, **k: pytest.fail("System DNS used"))
+    assert web._public_address("https://en.wikipedia.org/wiki/Eratosthenes") == address[0]
+    address[0] = "127.0.0.1"
+    with pytest.raises(ValueError, match="No public"):
+        web._public_address("https://en.wikipedia.org/wiki/Eratosthenes")
+    with pytest.raises(ValueError, match="Nonpublic"):
+        web._public_address("http://127.0.0.1/")
+
+
 def test_ndcg_accounts_for_order():
     assert ndcg([1, 0], [0.9, 0.1]) == 1
     assert 0 < ndcg([1, 0], [0.1, 0.9]) < 1

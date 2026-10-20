@@ -15,6 +15,7 @@ Copy `.env.example` to `.env` in the application root. Existing environment vari
 | `CITEWEAVE_MAX_IMAGES` | `10` | Upper bound on selected image candidates. |
 | `CITEWEAVE_CACHE_TTL` | `900` | Recent web-answer cache lifetime in seconds; `0` disables it. |
 | `CITEWEAVE_RATE_LIMIT` | `10` | Maximum admitted POST requests per client address per minute. |
+| `CITEWEAVE_DOH` | `0` | `1` resolves origin hostnames through Google's HTTPS DNS endpoint, bypassing polluted system DNS. Public-address validation and TLS verification still apply. |
 | `SEARXNG_URL` | empty | Administrator-controlled SearXNG base URL with JSON search enabled. Empty uses DDGS. |
 | `CITEWEAVE_API_BASE` | `https://api.deepseek.com` | Text generation API base URL, when API mode is selected. |
 | `CITEWEAVE_API_MODEL` | `deepseek-flash` | API text model. Thinking is disabled in generation requests. |
@@ -24,6 +25,8 @@ Copy `.env.example` to `.env` in the application root. Existing environment vari
 All secrets remain server-side. The browser receives a workspace session cookie after login, never the model-provider API key. API mode can incur provider charges; it still requires local image and embedding models and is not a CPU-only mode.
 
 ## Search backends
+
+If your network needs an HTTP CONNECT proxy, set `HTTPS_PROXY`/`HTTP_PROXY` in the service environment. When system DNS returns fake or polluted addresses, `CITEWEAVE_DOH=1` can provide public origin resolution through DNS over HTTPS. This requires access to `https://dns.google`; DNS names are sent to that resolver. Private IP literals and nonpublic resolver answers remain blocked. Do not disable destination or TLS checks to work around network problems.
 
 The default DDGS backend is convenient for individual installations. Managed workspaces should configure a controlled SearXNG service with JSON enabled. Explicit public URLs work independently of search discovery. A configured SearXNG backend is trusted infrastructure, not a user-supplied destination.
 
